@@ -1,8 +1,9 @@
-﻿using Esri.ArcGISRuntime.Controls;
-using Esri.ArcGISRuntime.Geometry;
-using Esri.ArcGISRuntime.Layers;
+﻿using Esri.ArcGISRuntime.Geometry;
+using Esri.ArcGISRuntime.UI;
+using Esri.ArcGISRuntime.UI.Controls;
 using SceneEditingDemo.Helpers;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -20,11 +21,11 @@ namespace SceneEditingDemo
 		public MainWindow()
 		{
 			InitializeComponent();
-			DrawShapes.ItemsSource = new DrawShape[]
+			DrawShapes.ItemsSource = new SketchCreationMode[]
             {
-                DrawShape.Point,
-                DrawShape.Polyline,
-                DrawShape.Polygon
+                SketchCreationMode.Point,
+                SketchCreationMode.Polyline,
+                SketchCreationMode.Polygon
             };
 			DrawShapes.SelectedIndex = 0;
 
@@ -53,19 +54,19 @@ namespace SceneEditingDemo
                 ClearButton.IsEnabled = false;
 
                 // Draw geometry and create a new graphic using it
-                switch ((DrawShape)DrawShapes.SelectedValue)
+                switch ((SketchCreationMode)DrawShapes.SelectedValue)
 		        {
-			        case DrawShape.Point:
+			        case SketchCreationMode.Point:
                         geometry = await SceneEditHelper.CreatePointAsync(MySceneView);
 				        graphic = new Graphic(geometry);
 				        _pointsOverlay.Graphics.Add(graphic);
 				        break;
-			        case DrawShape.Polygon:
+			        case SketchCreationMode.Polygon:
 				        geometry = await SceneEditHelper.CreatePolygonAsync(MySceneView);
 				        graphic = new Graphic(geometry);
 				        _polygonsOverlay.Graphics.Add(graphic);
 				        break;
-			        case DrawShape.Polyline:
+			        case SketchCreationMode.Polyline:
 				        geometry = await SceneEditHelper.CreatePolylineAsync(MySceneView);
 				        graphic = new Graphic(geometry);
 				        _polylinesOverlay.Graphics.Add(graphic);
@@ -159,7 +160,7 @@ namespace SceneEditingDemo
 			EditButton.IsEnabled = false; 
 		}
 
-		private async void MySceneView_SceneViewTapped(object sender, MapViewInputEventArgs e)
+		private async void MySceneView_SceneViewTapped(object sender, GeoViewInputEventArgs e)
 		{
 			// If draw or edit is active, return
 			if (SceneEditHelper.IsActive) return; 
@@ -178,20 +179,15 @@ namespace SceneEditingDemo
 			}
 			_selection = null;
 
-			// Find first graphic from the overlays
-			foreach (var overlay in MySceneView.GraphicsOverlays)
-			{
-				var foundGraphic = await overlay.HitTestAsync(
-						MySceneView,
-						point);
-
-				if (foundGraphic != null)
-				{
-					_selection = new GraphicSelection(foundGraphic, overlay);
-					_selection.Select();
-					break;
-				}
-			}
+            // Find first graphic from the overlays
+            var result = await MySceneView.IdentifyGraphicsOverlaysAsync(point, 10, false);
+            var overlayResult = result?.FirstOrDefault();
+            var foundGraphic = overlayResult?.Graphics?.FirstOrDefault();
+            if(foundGraphic != null)
+            {
+                _selection = new GraphicSelection(foundGraphic, overlayResult.GraphicsOverlay);
+                _selection.Select();
+            }
 
 			EditButton.IsEnabled = _selection == null ? false : true;
 		}

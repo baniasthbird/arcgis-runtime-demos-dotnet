@@ -1,10 +1,9 @@
-﻿using Esri.ArcGISRuntime.Controls;
-using Esri.ArcGISRuntime.Geometry;
-using Esri.ArcGISRuntime.Layers;
+﻿using Esri.ArcGISRuntime.Geometry;
+using Esri.ArcGISRuntime.UI;
 
 namespace SceneEditingDemo
 {
-	public class GraphicSelection
+    public class GraphicSelection
 	{
 		public GraphicSelection(Graphic graphic, GraphicsOverlay overlay)
 		{

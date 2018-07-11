@@ -1,16 +1,11 @@
-﻿using Esri.ArcGISRuntime.Controls;
-using Esri.ArcGISRuntime.Geometry;
-using Esri.ArcGISRuntime.Layers;
+﻿using Esri.ArcGISRuntime.Geometry;
 using Esri.ArcGISRuntime.Symbology;
+using Esri.ArcGISRuntime.UI;
+using Esri.ArcGISRuntime.UI.Controls;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-
-#if NETFX_CORE
-using Windows.UI;
-#else
-using System.Windows.Media;
-#endif
+using Color = System.Drawing.Color;
 
 namespace SceneEditingDemo.Helpers
 {
@@ -22,7 +17,7 @@ namespace SceneEditingDemo.Helpers
 	{
 		#region Default draw symbols
 		//Symbol used by DrawPointAsync while moving the mouse
-		private static MarkerSymbol DefaultMarkerSymbol = new SimpleMarkerSymbol() { Color = Colors.Blue };
+		private static MarkerSymbol DefaultMarkerSymbol = new SimpleMarkerSymbol() { Color = Color.Blue };
 
 		//Symbol used by DrawPolylineAsync	
 		private static LineSymbol DefaultLineSymbol = new SimpleLineSymbol()
@@ -34,7 +29,7 @@ namespace SceneEditingDemo.Helpers
 		//Symbol used by DrawPolygonAsync
 		private static FillSymbol DefaultFillSymbol = new SimpleFillSymbol()
 		{
-			Outline = new SimpleLineSymbol() { Width = 2, Color = Colors.Black },
+			Outline = new SimpleLineSymbol() { Width = 2, Color = Color.Black },
 			Color = Color.FromArgb(100, 0, 0, 255)
 		};
 
@@ -43,7 +38,7 @@ namespace SceneEditingDemo.Helpers
 		{
 			Width = 5,
 			Color = Color.FromArgb(100, 255, 255, 255),
-			Style = SimpleLineStyle.Dot
+			Style = SimpleLineSymbolStyle.Dot
 		};
 		#endregion Default draw symbols
 
@@ -94,11 +89,12 @@ namespace SceneEditingDemo.Helpers
 		public static async Task<Polyline> DrawPolylineAsync(SceneView sceneView, System.Threading.CancellationToken cancellationToken)
 		{
 			var tcs = new TaskCompletionSource<Polyline>();
-			PolylineBuilder polylineBuilder = new PolylineBuilder(sceneView.SpatialReference);
+			PolylineBuilder polylineBuilder = new PolylineBuilder(sceneView.SpatialReference);            
 			var sketchlayer = CreateSketchLayer(sceneView);
 			Graphic lineGraphic = new Graphic() { Symbol = DefaultLineSymbol };
 			Graphic lineMoveGraphic = new Graphic() { Symbol = DefaultLineMoveSymbol };
-			sketchlayer.Graphics.AddRange(new Graphic[] { lineGraphic, lineMoveGraphic });
+            sketchlayer.Graphics.Add(lineGraphic);
+            sketchlayer.Graphics.Add(lineMoveGraphic);
 			Action cleanupEvents = SetUpHandlers(sceneView,
 				(p) => //On mouse move, move completion line around
 				{
@@ -111,7 +107,10 @@ namespace SceneEditingDemo.Helpers
 				{
 					if (p != null)
 					{
-						polylineBuilder.AddPoint(p);
+                        if (polylineBuilder.Parts.Count == 0)
+                            polylineBuilder.AddPart(new[] { p });
+                        else
+                            polylineBuilder.AddPoint(p);
 						if (polylineBuilder.Parts.Count > 0 && polylineBuilder.Parts[0].Count >= 1)
 							lineGraphic.Geometry = polylineBuilder.ToGeometry();
 					}
@@ -146,8 +145,9 @@ namespace SceneEditingDemo.Helpers
 			var sketchlayer = CreateSketchLayer(sceneView);
 			Graphic polygonGraphic = new Graphic() { Symbol = DefaultFillSymbol };
 			Graphic lineMoveGraphic = new Graphic() { Symbol = DefaultLineMoveSymbol };
-			sketchlayer.Graphics.AddRange(new Graphic[] { polygonGraphic, lineMoveGraphic });
-			Action cleanupEvents = SetUpHandlers(sceneView,
+            sketchlayer.Graphics.Add(polygonGraphic);
+            sketchlayer.Graphics.Add(lineMoveGraphic);
+            Action cleanupEvents = SetUpHandlers(sceneView,
 				(p) => //On mouse move move completion line around
 				{
 					if (p != null && polygonBuilder.Parts.Count > 0)
@@ -163,8 +163,11 @@ namespace SceneEditingDemo.Helpers
 				(p) => //On tap add a vertex
 				{
 					if (p != null)
-					{
-						polygonBuilder.AddPoint(p);
+                    {
+                        if (polygonBuilder.Parts.Count == 0)
+                            polygonBuilder.AddPart(new[] { p });
+                        else
+                            polygonBuilder.AddPoint(p);
 						if (polygonBuilder.Parts.Count > 0 && polygonBuilder.Parts[0].Count > 0)
 						{
 							polygonGraphic.Geometry = polygonBuilder.ToGeometry();
@@ -220,21 +223,21 @@ namespace SceneEditingDemo.Helpers
 				movehandler = (s, e) => onMove(view.ScreenToLocation(e.GetCurrentPoint(view).Position));
 				view.PointerMoved += movehandler;
 #else
-				movehandler = (s, e) => onMove(view.ScreenToLocation(e.GetPosition(view)));
+				movehandler = (s, e) => onMove(view.ScreenToBaseSurface(e.GetPosition(view)));
 				view.MouseMove += movehandler;
 #endif
 			}
-			EventHandler<MapViewInputEventArgs> tappedHandler = null;
+			EventHandler<GeoViewInputEventArgs> tappedHandler = null;
 			if (onTapped != null)
 			{
 				tappedHandler = (s, e) => onTapped(e.Location);
-				view.SceneViewTapped += tappedHandler;
+				view.GeoViewTapped += tappedHandler;
 			}
-			EventHandler<MapViewInputEventArgs> doubletappedHandler = null;
+			EventHandler<GeoViewInputEventArgs> doubletappedHandler = null;
 			if (onDoubleTapped != null)
 			{
 				doubletappedHandler = (s, e) => { e.Handled = true; onDoubleTapped(e.Location); };
-				view.SceneViewDoubleTapped += doubletappedHandler;
+				view.GeoViewDoubleTapped += doubletappedHandler;
 			}
 			Action cleanup = () =>
 			{
@@ -244,13 +247,13 @@ namespace SceneEditingDemo.Helpers
 #else
 					view.MouseMove -= movehandler;
 #endif
-				if (tappedHandler != null) view.SceneViewTapped -= tappedHandler;
-				if (doubletappedHandler != null) view.SceneViewDoubleTapped -= doubletappedHandler;
+				if (tappedHandler != null) view.GeoViewTapped -= tappedHandler;
+				if (doubletappedHandler != null) view.GeoViewDoubleTapped -= doubletappedHandler;
 			};
 			return cleanup;
 		}
 
-		private static GraphicsOverlay CreateSketchLayer(ViewBase scene)
+		private static GraphicsOverlay CreateSketchLayer(GeoView scene)
 		{
 			GraphicsOverlay go = new GraphicsOverlay();
 			scene.GraphicsOverlays.Add(go);
